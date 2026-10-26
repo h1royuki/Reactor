@@ -96,8 +96,8 @@ struct PostDetailView: View {
         .navigationTitle("Пост")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let post {
-                ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .topBarTrailing) {
+                if let post {
                     ShareLink(item: post.webURL)
                 }
             }
