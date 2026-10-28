@@ -52,39 +52,38 @@ struct FeedView: View {
                     .offset(y: chrome.barsHidden ? -FeedHeader.height : 0)
             }
             .overlay(alignment: .top) {
-                // Solid status bar strip the header slides under.
+                // Blurred status bar strip the header slides under.
                 Color.clear
                     .frame(maxWidth: .infinity)
                     .frame(height: 0)
-                    .background(Color(.systemBackground))
+                    .background(.bar)
             }
             .toolbar(.hidden, for: .navigationBar)
             .onChange(of: kind) { chrome.resetScrollTracking() }
     }
 }
 
-/// Solid top bar: logo on the leading edge, feed switcher in the middle. Hides on scroll down.
-/// Search and profile live in the tab bar, so they are not repeated here.
+/// Blurred top bar: logo on the leading edge, feed switcher as the centered title.
+/// Hides on scroll down. Search and profile live in the tab bar, so they are not repeated here.
 struct FeedHeader: View {
-    static let height: CGFloat = 56
+    static let height: CGFloat = 50
 
     @Binding var kind: FeedKind
 
     var body: some View {
-        ZStack {
-            HStack {
-                Button {
-                    AppChrome.shared.scrollToTop()
-                } label: {
-                    Image("Logo")
-                        .resizable()
-                        .frame(width: 34, height: 34)
-                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Joyreactor, наверх")
-                Spacer()
+        HStack(spacing: 0) {
+            Button {
+                AppChrome.shared.scrollToTop()
+            } label: {
+                Image("Logo")
+                    .resizable()
+                    .frame(width: 28, height: 28)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .frame(width: 44, height: 44, alignment: .leading)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Joyreactor, наверх")
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Menu {
                 Picker("Раздел", selection: $kind) {
@@ -93,25 +92,27 @@ struct FeedHeader: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: kind.icon)
-                        .font(.footnote.weight(.semibold))
+                HStack(spacing: 5) {
                     Text(kind.title)
                         .font(.headline)
+                        .foregroundStyle(Color.primary)
                     Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.secondary)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.secondary)
                 }
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 16)
-                .frame(height: 36)
-                .background(Color(.secondarySystemBackground), in: Capsule())
-                .contentShape(Capsule())
+                .padding(.horizontal, 8)
+                .frame(height: 44)
+                .contentShape(Rectangle())
             }
+            .tint(Color.primary)
+            .fixedSize()
+
+            Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
         }
         .padding(.horizontal, 16)
         .frame(height: Self.height)
-        .background(Color(.systemBackground))
+        // The status bar strip has its own blur, so this one stays inside the safe area.
+        .background(.bar, ignoresSafeAreaEdges: [])
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color(.separator))

@@ -99,7 +99,7 @@ struct TabRoot<Content: View>: View {
 
 /// Floating tab bar that slides away while scrolling down.
 struct FloatingTabBar: View {
-    static let reservedHeight: CGFloat = 70
+    static let reservedHeight: CGFloat = 68
 
     let selection: AppTab
     let onSelect: (AppTab) -> Void
@@ -117,7 +117,6 @@ struct FloatingTabBar: View {
         .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08)))
         .compositingGroup()
         .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
-        .padding(.horizontal, 18)
         .padding(.bottom, 4)
     }
 
@@ -134,8 +133,7 @@ struct FloatingTabBar: View {
                     .font(.caption2.weight(.semibold))
             }
             .foregroundStyle(selected ? Color.accentColor : Color.secondary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .frame(width: 76, height: 50)
             .background {
                 if selected {
                     Capsule()
