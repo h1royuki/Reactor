@@ -1,4 +1,4 @@
-# Реактор — iOS-клиент для JoyReactor
+# Joyreactor — iOS-клиент для joyreactor.cc
 
 Неофициальное нативное приложение для [joyreactor.cc](https://joyreactor.cc) на SwiftUI (iOS 17+).
 

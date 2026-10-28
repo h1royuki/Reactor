@@ -63,7 +63,7 @@ struct FeedView: View {
     }
 }
 
-/// Solid top bar: logo and feed switcher. Hides on scroll down.
+/// Solid top bar: logo on the leading edge, feed switcher in the middle. Hides on scroll down.
 /// Search and profile live in the tab bar, so they are not repeated here.
 struct FeedHeader: View {
     static let height: CGFloat = 56
@@ -71,24 +71,20 @@ struct FeedHeader: View {
     @Binding var kind: FeedKind
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button {
-                AppChrome.shared.scrollToTop()
-            } label: {
-                HStack(spacing: 9) {
+        ZStack {
+            HStack {
+                Button {
+                    AppChrome.shared.scrollToTop()
+                } label: {
                     Image("Logo")
                         .resizable()
-                        .frame(width: 32, height: 32)
+                        .frame(width: 34, height: 34)
                         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    Text("Реактор")
-                        .font(.system(size: 25, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.primary)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Joyreactor, наверх")
+                Spacer()
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Наверх")
-
-            Spacer()
 
             Menu {
                 Picker("Раздел", selection: $kind) {
@@ -101,13 +97,13 @@ struct FeedHeader: View {
                     Image(systemName: kind.icon)
                         .font(.footnote.weight(.semibold))
                     Text(kind.title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.headline)
                     Image(systemName: "chevron.down")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.secondary)
                 }
                 .foregroundStyle(.primary)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 16)
                 .frame(height: 36)
                 .background(Color(.secondarySystemBackground), in: Capsule())
                 .contentShape(Capsule())

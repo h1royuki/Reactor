@@ -104,6 +104,11 @@ final class ZoomScrollView: UIScrollView, UIScrollViewDelegate {
     let imageView = UIImageView()
     private var lastBoundsSize: CGSize = .zero
 
+    /// Vertical drag distance while swiping to close (0 when released).
+    var onDismissDrag: ((CGFloat) -> Void)?
+    var onDismiss: (() -> Void)?
+    private lazy var dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         delegate = self
@@ -118,6 +123,47 @@ final class ZoomScrollView: UIScrollView, UIScrollViewDelegate {
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
         doubleTap.numberOfTapsRequired = 2
         addGestureRecognizer(doubleTap)
+        addGestureRecognizer(dismissPan)
+        // Scrolling a long picture waits until the close gesture decides it does not apply.
+        panGestureRecognizer.require(toFail: dismissPan)
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === dismissPan else {
+            return super.gestureRecognizerShouldBegin(gestureRecognizer)
+        }
+        let velocity = dismissPan.velocity(in: self)
+        guard abs(velocity.y) > abs(velocity.x) * 1.2, zoomScale <= minimumZoomScale + 0.01 else { return false }
+        if contentSize.height <= bounds.height + 1 { return true }
+        let atTop = contentOffset.y <= -contentInset.top + 1
+        let atBottom = contentOffset.y >= contentSize.height - bounds.height + contentInset.bottom - 1
+        return (atTop && velocity.y > 0) || (atBottom && velocity.y < 0)
+    }
+
+    @objc private func handleDismissPan(_ recognizer: UIPanGestureRecognizer) {
+        let translation = recognizer.translation(in: self).y
+        switch recognizer.state {
+        case .changed:
+            imageView.transform = CGAffineTransform(translationX: 0, y: translation)
+            onDismissDrag?(translation)
+        case .ended, .cancelled:
+            let velocity = recognizer.velocity(in: self).y
+            if recognizer.state == .ended, abs(translation) > 120 || abs(velocity) > 900 {
+                let direction: CGFloat = (translation + velocity * 0.1) >= 0 ? 1 : -1
+                UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseIn) {
+                    self.imageView.transform = CGAffineTransform(translationX: 0, y: direction * self.bounds.height)
+                } completion: { _ in
+                    self.onDismiss?()
+                }
+            } else {
+                UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0) {
+                    self.imageView.transform = .identity
+                }
+                onDismissDrag?(0)
+            }
+        default:
+            break
+        }
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -176,10 +222,14 @@ final class ZoomScrollView: UIScrollView, UIScrollViewDelegate {
 
 struct ZoomableImage: UIViewRepresentable {
     let image: UIImage?
+    var onDrag: (CGFloat) -> Void = { _ in }
+    var onDismiss: () -> Void = {}
 
     func makeUIView(context: Context) -> ZoomScrollView { ZoomScrollView() }
 
     func updateUIView(_ view: ZoomScrollView, context: Context) {
+        view.onDismissDrag = onDrag
+        view.onDismiss = onDismiss
         view.setImage(image)
     }
 }

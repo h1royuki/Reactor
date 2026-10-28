@@ -94,6 +94,7 @@ struct MediaViewer: View {
     @State private var shareItem: ShareItem?
     @State private var preparingShare = false
     @State private var showChrome = true
+    @State private var dragOffset: CGFloat = 0
 
     init(state: MediaViewerState) {
         attributes = state.attributes
@@ -102,10 +103,14 @@ struct MediaViewer: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color.black
+                .opacity(1 - Double(min(abs(dragOffset) / 400, 0.85)))
+                .ignoresSafeArea()
             TabView(selection: $selection) {
                 ForEach(Array(attributes.enumerated()), id: \.offset) { index, attribute in
-                    MediaPage(attribute: attribute)
+                    MediaPage(attribute: attribute,
+                              onDrag: { dragOffset = $0 },
+                              onDismiss: dismissWithoutAnimation)
                         .tag(index)
                         .onTapGesture { withAnimation { showChrome.toggle() } }
                 }
@@ -114,7 +119,7 @@ struct MediaViewer: View {
             .ignoresSafeArea()
         }
         .overlay(alignment: .top) {
-            if showChrome {
+            if showChrome && dragOffset == 0 {
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
@@ -148,10 +153,18 @@ struct MediaViewer: View {
         }
         .environment(\.colorScheme, .dark)
         .statusBarHidden(!showChrome)
+        .presentationBackground(.clear)
         .sheet(item: $shareItem) { item in
             ShareSheet(items: [item.url])
                 .presentationDetents([.medium, .large])
         }
+    }
+
+    /// The page already animated itself off screen, so skip the cover's own slide-down.
+    private func dismissWithoutAnimation() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { dismiss() }
     }
 
     private func share() {
@@ -182,13 +195,15 @@ struct MediaViewer: View {
 
 private struct MediaPage: View {
     let attribute: Attribute
+    let onDrag: (CGFloat) -> Void
+    let onDismiss: () -> Void
 
     @State private var image: UIImage?
 
     var body: some View {
         switch attribute.kind {
         case .picture:
-            ZoomableImage(image: image)
+            ZoomableImage(image: image, onDrag: onDrag, onDismiss: onDismiss)
                 .overlay { if image == nil { ProgressView().tint(.white) } }
                 .task {
                     if let preview = attribute.imageURL,
@@ -206,10 +221,47 @@ private struct MediaPage: View {
             GIFView(url: attribute.imageURL, posterURL: attribute.posterURL)
                 .aspectRatio(attribute.image.aspectRatio, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .modifier(SwipeToDismiss(onDrag: onDrag, onDismiss: onDismiss))
         case .video:
             RemoteImage(url: attribute.posterURL, contentMode: .fit)
+                .modifier(SwipeToDismiss(onDrag: onDrag, onDismiss: onDismiss))
         case .embed:
             RemoteImage(url: attribute.embedThumbnailURL, contentMode: .fit)
+                .modifier(SwipeToDismiss(onDrag: onDrag, onDismiss: onDismiss))
         }
+    }
+}
+
+/// Vertical swipe that drags content and closes the viewer past a threshold.
+struct SwipeToDismiss: ViewModifier {
+    let onDrag: (CGFloat) -> Void
+    let onDismiss: () -> Void
+
+    @State private var offset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: offset)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 15)
+                    .onChanged { value in
+                        guard offset != 0 || abs(value.translation.height) > abs(value.translation.width) else { return }
+                        offset = value.translation.height
+                        onDrag(offset)
+                    }
+                    .onEnded { value in
+                        guard offset != 0 else { return }
+                        if abs(offset) > 120 || abs(value.predictedEndTranslation.height) > 500 {
+                            withAnimation(.easeIn(duration: 0.18)) {
+                                offset = offset > 0 ? 1200 : -1200
+                            } completion: {
+                                onDismiss()
+                            }
+                        } else {
+                            withAnimation(.snappy) { offset = 0 }
+                            onDrag(0)
+                        }
+                    }
+            )
     }
 }

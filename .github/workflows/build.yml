@@ -64,6 +64,6 @@ jobs:
           TAG="build-${{ github.run_number }}"
           gh release create "$TAG" Reactor.ipa \
             --target "${{ github.sha }}" \
-            --title "Реактор (сборка ${{ github.run_number }})" \
+            --title "Joyreactor (сборка ${{ github.run_number }})" \
             --notes "Неподписанный IPA. Установка: AltStore / SideStore / Sideloadly / TrollStore." \
             --latest

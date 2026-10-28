@@ -120,7 +120,7 @@ struct LoginView: View {
                     Image(systemName: "atom")
                         .font(.system(size: 54, weight: .semibold))
                         .foregroundStyle(Color.accentColor.gradient)
-                    Text("Вход в JoyReactor")
+                    Text("Вход в Joyreactor")
                         .font(.title2.weight(.bold))
                     Text("Голосуйте, сохраняйте посты в избранное, подписывайтесь на теги и комментируйте.")
                         .font(.subheadline)
@@ -304,7 +304,7 @@ struct SettingsView: View {
             } header: {
                 Text("О приложении")
             } footer: {
-                Text("Неофициальный клиент JoyReactor. Весь контент принадлежит его авторам.")
+                Text("Неофициальный клиент Joyreactor. Весь контент принадлежит его авторам.")
             }
         }
         .navigationTitle("Настройки")
