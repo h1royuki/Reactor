@@ -334,7 +334,7 @@ struct VideoViewer: View {
     var body: some View {
         ZStack {
             Color.black
-                .opacity(1 - min(abs(dragOffset) / 400, 0.6))
+                .opacity(1 - Double(min(abs(dragOffset) / 400, 0.6)))
                 .ignoresSafeArea()
 
             WebVideoView(controller: controller, sources: attribute.videoURLs, poster: attribute.posterURL,
