@@ -41,9 +41,8 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            FloatingTabBar(selection: chrome.selectedTab, collapsed: chrome.barsHidden,
-                           onSelect: select, onExpand: { chrome.showBars() })
-                .offset(y: tabBarVisible ? 0 : 160)
+            FloatingTabBar(selection: chrome.selectedTab, onSelect: select)
+                .offset(y: tabBarVisible && !chrome.barsHidden ? 0 : 160)
                 .animation(.snappy(duration: 0.3), value: tabBarVisible)
         }
         .overlay(alignment: .top) { ToastOverlay() }
@@ -98,52 +97,24 @@ struct TabRoot<Content: View>: View {
     }
 }
 
-/// Reddit-style floating tab bar: a capsule that collapses into a round button
-/// on the leading edge while scrolling down.
+/// Floating tab bar that slides away while scrolling down.
 struct FloatingTabBar: View {
     static let reservedHeight: CGFloat = 70
 
     let selection: AppTab
-    let collapsed: Bool
     let onSelect: (AppTab) -> Void
-    let onExpand: () -> Void
 
     @Namespace private var namespace
 
     var body: some View {
-        HStack(spacing: 0) {
-            if collapsed {
-                Button(action: onExpand) {
-                    Image(systemName: selection.selectedIcon)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 58, height: 58)
-                        .background {
-                            Circle()
-                                .fill(.regularMaterial)
-                                .matchedGeometryEffect(id: "bar", in: namespace)
-                        }
-                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.08)))
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Показать панель вкладок")
-                Spacer(minLength: 0)
-            } else {
-                HStack(spacing: 2) {
-                    ForEach(AppTab.allCases) { tab in
-                        item(tab)
-                    }
-                }
-                .padding(5)
-                .background {
-                    Capsule()
-                        .fill(.regularMaterial)
-                        .matchedGeometryEffect(id: "bar", in: namespace)
-                }
-                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08)))
+        HStack(spacing: 2) {
+            ForEach(AppTab.allCases) { tab in
+                item(tab)
             }
         }
+        .padding(5)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08)))
         .compositingGroup()
         .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
         .padding(.horizontal, 18)

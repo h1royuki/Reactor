@@ -31,7 +31,7 @@ enum AppTab: Hashable, CaseIterable, Identifiable {
 }
 
 /// App-wide state of the top header and the floating tab bar.
-/// Scrolling down hides the header and collapses the tab bar, scrolling up brings them back.
+/// Scrolling down hides the header and the tab bar, scrolling up brings them back.
 @MainActor
 @Observable
 final class AppChrome {
