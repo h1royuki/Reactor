@@ -99,29 +99,55 @@ final class PostListModelStore {
 /// Infinite scrolling list of post cards with an optional header.
 struct PostFeed<Header: View>: View {
     let model: PostListModel
+    /// Drives the hide-on-scroll header and tab bar (only for tab root feeds).
+    var tracksChrome = false
     @ViewBuilder var header: () -> Header
 
-    init(model: PostListModel, @ViewBuilder header: @escaping () -> Header) {
+    @State private var baseline: CGFloat?
+
+    private static var topAnchor: String { "feed-top" }
+    private static var space: String { "feed-scroll" }
+
+    init(model: PostListModel, tracksChrome: Bool = false, @ViewBuilder header: @escaping () -> Header) {
         self.model = model
+        self.tracksChrome = tracksChrome
         self.header = header
     }
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                header()
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    Color.clear
+                        .frame(height: 0)
+                        .id(Self.topAnchor)
 
-                ForEach(model.posts) { post in
-                    PostCard(post: post)
-                        .onAppear {
-                            if model.posts.suffix(4).contains(where: { $0.id == post.id }) {
-                                Task { await model.loadMore() }
+                    header()
+
+                    ForEach(model.posts) { post in
+                        PostCard(post: post)
+                            .onAppear {
+                                if model.posts.suffix(4).contains(where: { $0.id == post.id }) {
+                                    Task { await model.loadMore() }
+                                }
                             }
-                        }
-                    SectionSeparator()
-                }
+                        SectionSeparator()
+                    }
 
-                footer
+                    footer
+                }
+                .onGeometryChange(for: CGFloat.self) { geometry in
+                    geometry.frame(in: .named(Self.space)).minY
+                } action: { minY in
+                    guard tracksChrome else { return }
+                    if baseline == nil { baseline = minY }
+                    AppChrome.shared.track(offset: (baseline ?? minY) - minY)
+                }
+            }
+            .coordinateSpace(.named(Self.space))
+            .onChange(of: AppChrome.shared.scrollToTopSignal) {
+                guard tracksChrome else { return }
+                withAnimation(.snappy) { proxy.scrollTo(Self.topAnchor, anchor: .top) }
             }
         }
         .background(Color(.systemGroupedBackground))
@@ -156,8 +182,8 @@ struct PostFeed<Header: View>: View {
 }
 
 extension PostFeed where Header == EmptyView {
-    init(model: PostListModel) {
-        self.init(model: model) { EmptyView() }
+    init(model: PostListModel, tracksChrome: Bool = false) {
+        self.init(model: model, tracksChrome: tracksChrome) { EmptyView() }
     }
 }
 
