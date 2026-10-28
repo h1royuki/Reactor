@@ -63,98 +63,63 @@ struct FeedView: View {
     }
 }
 
-/// Solid top bar: logo, search shortcut and feed switcher. Hides on scroll down.
+/// Solid top bar: logo and feed switcher. Hides on scroll down.
+/// Search and profile live in the tab bar, so they are not repeated here.
 struct FeedHeader: View {
-    static let height: CGFloat = 104
+    static let height: CGFloat = 56
 
     @Binding var kind: FeedKind
 
-    private var chrome: AppChrome { .shared }
-    private var auth: AuthStore { .shared }
-
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Button {
-                    chrome.scrollToTop()
-                } label: {
-                    HStack(spacing: 9) {
-                        Image("Logo")
-                            .resizable()
-                            .frame(width: 32, height: 32)
-                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                        Text("Реактор")
-                            .font(.system(size: 25, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.primary)
-                    }
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                headerButton("magnifyingglass") {
-                    chrome.selectedTab = .explore
-                }
-                headerButton(auth.isLoggedIn ? "person.crop.circle.fill" : "person.crop.circle") {
-                    chrome.selectedTab = .profile
+        HStack(spacing: 10) {
+            Button {
+                AppChrome.shared.scrollToTop()
+            } label: {
+                HStack(spacing: 9) {
+                    Image("Logo")
+                        .resizable()
+                        .frame(width: 32, height: 32)
+                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    Text("Реактор")
+                        .font(.system(size: 25, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.primary)
                 }
             }
-            .padding(.horizontal, 16)
-            .frame(height: 54)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Наверх")
 
-            FeedPicker(selection: $kind)
-                .frame(height: 50)
+            Spacer()
+
+            Menu {
+                Picker("Раздел", selection: $kind) {
+                    ForEach(FeedKind.all) { item in
+                        Label(item.title, systemImage: item.icon).tag(item)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: kind.icon)
+                        .font(.footnote.weight(.semibold))
+                    Text(kind.title)
+                        .font(.subheadline.weight(.semibold))
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 14)
+                .frame(height: 36)
+                .background(Color(.secondarySystemBackground), in: Capsule())
+                .contentShape(Capsule())
+            }
         }
-        .frame(height: Self.height, alignment: .top)
+        .padding(.horizontal, 16)
+        .frame(height: Self.height)
         .background(Color(.systemBackground))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color(.separator))
                 .frame(height: 1 / 3)
-        }
-    }
-
-    private func headerButton(_ icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 40, height: 40)
-                .background(Color(.secondarySystemBackground), in: Circle())
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct FeedPicker: View {
-    @Binding var selection: FeedKind
-
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(FeedKind.all) { item in
-                        let selected = item == selection
-                        Button {
-                            withAnimation(.snappy) { selection = item }
-                        } label: {
-                            Label(item.title, systemImage: item.icon)
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .foregroundStyle(selected ? Color.white : Color.primary)
-                                .background(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color(.secondarySystemBackground)),
-                                            in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .id(item)
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-            .onChange(of: selection) {
-                withAnimation(.snappy) { proxy.scrollTo(selection, anchor: .center) }
-            }
         }
     }
 }

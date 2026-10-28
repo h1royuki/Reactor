@@ -95,13 +95,6 @@ struct PostDetailView: View {
         .background(Color(.systemBackground))
         .navigationTitle("Пост")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                if let post {
-                    ShareLink(item: post.webURL)
-                }
-            }
-        }
         .safeAreaInset(edge: .bottom) {
             if auth.isLoggedIn, post != nil {
                 Button {

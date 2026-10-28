@@ -9,6 +9,8 @@ enum Route: Hashable {
     case subscriptions
     case settings
     case search(String)
+    /// Posts list without the profile header (the profile tab already shows it).
+    case userPosts(String)
 }
 
 /// Per-tab navigation state; also turns joyreactor links into in-app navigation.
@@ -71,6 +73,7 @@ extension View {
             case .subscriptions: SubscriptionsView()
             case .settings: SettingsView()
             case .search(let query): PostListScreen(title: query, source: .search(query: query))
+            case .userPosts(let name): PostListScreen(title: "Мои посты", source: .user(username: name))
             }
         }
     }

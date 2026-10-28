@@ -399,9 +399,6 @@ struct VideoViewer: View {
             Spacer()
             Menu {
                 if let post {
-                    ShareLink(item: post.webURL) {
-                        Label("Поделиться постом", systemImage: "square.and.arrow.up")
-                    }
                     Link(destination: post.webURL) {
                         Label("Открыть в Safari", systemImage: "safari")
                     }

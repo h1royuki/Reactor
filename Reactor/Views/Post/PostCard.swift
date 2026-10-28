@@ -75,9 +75,6 @@ struct PostHeader: View {
             }
 
             Menu {
-                ShareLink(item: post.webURL) {
-                    Label("Поделиться", systemImage: "square.and.arrow.up")
-                }
                 Button {
                     UIPasteboard.general.url = post.webURL
                     ToastCenter.shared.show("Ссылка скопирована")

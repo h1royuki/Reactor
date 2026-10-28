@@ -39,7 +39,7 @@ private struct LoggedInProfile: View {
             }
 
             Section {
-                NavigationLink(value: Route.user(user.username)) {
+                NavigationLink(value: Route.userPosts(user.username)) {
                     Label("Мои посты", systemImage: "square.grid.2x2")
                 }
                 NavigationLink(value: Route.favorites) {
@@ -47,12 +47,6 @@ private struct LoggedInProfile: View {
                 }
                 NavigationLink(value: Route.subscriptions) {
                     Label("Подписки на теги", systemImage: "number")
-                }
-            }
-
-            Section {
-                NavigationLink(value: Route.settings) {
-                    Label("Настройки", systemImage: "gearshape")
                 }
             }
 
