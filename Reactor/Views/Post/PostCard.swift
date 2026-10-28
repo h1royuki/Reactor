@@ -87,10 +87,10 @@ struct PostHeader: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(.secondary)
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
+            .tint(Color.secondary)
         }
     }
 }
@@ -145,11 +145,12 @@ struct PostActionsBar: View {
     private var commentsLabel: some View {
         HStack(spacing: 6) {
             Image(systemName: "bubble.left")
+                .foregroundStyle(.secondary)
             Text("\(post.commentsCount)")
                 .monospacedDigit()
+                .foregroundStyle(.primary)
         }
-        .font(.subheadline.weight(.medium))
-        .foregroundStyle(.secondary)
+        .font(.subheadline.weight(.semibold))
         .padding(.horizontal, 12)
         .frame(height: 34)
         .background(Color(.tertiarySystemFill), in: Capsule())
