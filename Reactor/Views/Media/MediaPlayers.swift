@@ -194,8 +194,9 @@ final class ZoomScrollView: UIScrollView, UIScrollViewDelegate {
         }
         imageView.frame = CGRect(x: 0, y: 0, width: fittedWidth, height: height)
         contentSize = imageView.frame.size
-        contentOffset = .zero
         centerContent()
+        // The resting offset of inset-centered content is minus the insets, not zero.
+        contentOffset = CGPoint(x: -contentInset.left, y: -contentInset.top)
     }
 
     private func centerContent() {
