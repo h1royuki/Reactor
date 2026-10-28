@@ -24,6 +24,7 @@ final class AppSettings {
     }
 
     private init() {
+        defaults.register(defaults: ["autoplayVideo": true])
         showNSFW = defaults.bool(forKey: "showNSFW")
         autoplayVideo = defaults.bool(forKey: "autoplayVideo")
         fullQualityImages = defaults.bool(forKey: "fullQualityImages")

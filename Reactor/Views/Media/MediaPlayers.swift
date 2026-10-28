@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import ImageIO
-import WebKit
 
 // MARK: - Animated GIF
 
@@ -96,95 +95,6 @@ struct GIFView: View {
                 if !error.isCancellation { failed = true }
             }
         }
-    }
-}
-
-// MARK: - Video (joyreactor serves WebM, which only WebKit can play on iOS)
-
-struct WebVideoView: UIViewRepresentable {
-    let sources: [URL]
-    var poster: URL?
-    var muted = true
-
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.allowsInlineMediaPlayback = true
-        config.mediaTypesRequiringUserActionForPlayback = []
-        config.allowsPictureInPictureMediaPlayback = true
-        let view = WKWebView(frame: .zero, configuration: config)
-        view.isOpaque = false
-        view.backgroundColor = .black
-        view.scrollView.backgroundColor = .black
-        view.scrollView.isScrollEnabled = false
-        view.scrollView.contentInsetAdjustmentBehavior = .never
-        view.loadHTMLString(html, baseURL: URL(string: "https://joyreactor.cc/"))
-        return view
-    }
-
-    func updateUIView(_ view: WKWebView, context: Context) {}
-
-    static func dismantleUIView(_ view: WKWebView, coordinator: ()) {
-        view.evaluateJavaScript("document.querySelectorAll('video').forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); })")
-        view.loadHTMLString("", baseURL: nil)
-    }
-
-    private var html: String {
-        let sourceTags = sources.map { url -> String in
-            let type = url.pathExtension == "webm" ? "video/webm" : "video/mp4"
-            return "<source src=\"\(url.absoluteString)\" type=\"\(type)\">"
-        }.joined()
-        let posterAttr = poster.map { " poster=\"\($0.absoluteString)\"" } ?? ""
-        return """
-        <!doctype html><html><head>
-        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-        <style>
-        html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}
-        video{width:100%;height:100%;object-fit:contain;background:#000;display:block}
-        </style></head><body>
-        <video autoplay loop playsinline controls \(muted ? "muted" : "") preload="auto"\(posterAttr)>\(sourceTags)</video>
-        </body></html>
-        """
-    }
-}
-
-struct VideoAttributeView: View {
-    let attribute: Attribute
-    var autoplay: Bool
-
-    @State private var playing = false
-
-    var body: some View {
-        ZStack {
-            if playing {
-                WebVideoView(sources: attribute.videoURLs, poster: attribute.posterURL)
-            } else {
-                RemoteImage(url: attribute.posterURL, maxPixelWidth: Display.pixelWidth)
-                Button {
-                    playing = true
-                } label: {
-                    Image(systemName: "play.fill")
-                        .font(.title)
-                        .foregroundStyle(.white)
-                        .frame(width: 64, height: 64)
-                        .background(.ultraThinMaterial.opacity(0.9), in: Circle())
-                        .environment(\.colorScheme, .dark)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .overlay(alignment: .topLeading) {
-            if !playing {
-                Text(attribute.image.type == "GIF" ? "GIF" : "ВИДЕО")
-                    .font(.caption2.weight(.bold))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 5))
-                    .foregroundStyle(.white)
-                    .padding(8)
-            }
-        }
-        .onAppear { if autoplay { playing = true } }
-        .onDisappear { playing = false }
     }
 }
 

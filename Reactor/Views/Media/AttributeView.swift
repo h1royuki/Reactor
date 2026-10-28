@@ -207,9 +207,7 @@ private struct MediaPage: View {
                 .aspectRatio(attribute.image.aspectRatio, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .video:
-            WebVideoView(sources: attribute.videoURLs, poster: attribute.posterURL, muted: false)
-                .aspectRatio(attribute.image.aspectRatio, contentMode: .fit)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            RemoteImage(url: attribute.posterURL, contentMode: .fit)
         case .embed:
             RemoteImage(url: attribute.embedThumbnailURL, contentMode: .fit)
         }

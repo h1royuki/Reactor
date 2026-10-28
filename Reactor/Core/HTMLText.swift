@@ -53,7 +53,8 @@ enum ContentBuilder {
     }
 
     static func plainText(html: String) -> String {
-        String(HTMLText.attributed(html).characters)
+        let cleaned = html.replacingOccurrences(of: "&attribute_insert_\\d+&", with: " ", options: .regularExpression)
+        return String(HTMLText.attributed(cleaned).characters)
     }
 }
 

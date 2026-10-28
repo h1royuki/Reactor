@@ -28,6 +28,7 @@ struct PostCard: View {
             }
 
             PostContentView(post: post, collapsed: collapsed)
+                .environment(\.currentPost, post)
 
             if let poll = post.poll {
                 PollView(post: post, poll: poll)
