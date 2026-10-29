@@ -13,6 +13,13 @@ enum GQL {
       tags { id name nsfw unsafe }
       attributes { \(attributeFields) }
       poll { question voted answers { id answer count } }
+      bestComments {
+        id text createdAt rating level
+        parent { id }
+        user { id username }
+        vote { power }
+        attributes { \(attributeFields) }
+      }
     }
     """
 

@@ -98,6 +98,8 @@ struct Post: Decodable, Identifiable, Hashable {
     let tags: [TagRef]
     let attributes: [Attribute]
     var poll: Poll?
+    /// Top-rated comment the site shows under the post in feeds (absent when none qualifies).
+    let bestComments: [Comment]?
 
     var number: String { NodeID.number(id) }
     var webURL: URL { URL(string: "https://joyreactor.cc/post/\(number)")! }

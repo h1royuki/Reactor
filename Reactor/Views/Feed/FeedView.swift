@@ -52,11 +52,14 @@ struct FeedView: View {
                     .offset(y: chrome.barsHidden ? -FeedHeader.height : 0)
             }
             .overlay(alignment: .top) {
-                // Blurred status bar strip the header slides under.
+                // Once the header (whose background covers the status bar) slides away,
+                // this strip keeps text from running under the clock.
                 Color.clear
                     .frame(maxWidth: .infinity)
                     .frame(height: 0)
-                    .background(.bar)
+                    .background { ChromeBackground().ignoresSafeArea(edges: .top) }
+                    .opacity(chrome.barsHidden ? 1 : 0)
+                    .allowsHitTesting(false)
             }
             .toolbar(.hidden, for: .navigationBar)
             .onChange(of: kind) { chrome.resetScrollTracking() }
@@ -111,12 +114,21 @@ struct FeedHeader: View {
         }
         .padding(.horizontal, 16)
         .frame(height: Self.height)
-        // The status bar strip has its own blur, so this one stays inside the safe area.
-        .background(.bar, ignoresSafeAreaEdges: [])
+        // One blur for the header and the status bar above it.
+        .background { ChromeBackground().ignoresSafeArea(edges: .top) }
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(Color(.separator))
                 .frame(height: 1 / 3)
         }
+    }
+}
+
+/// Dark-leaning blur for bars: content shows through softly without turning the bar grey.
+struct ChromeBackground: View {
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay(Color(.systemBackground).opacity(0.72))
     }
 }

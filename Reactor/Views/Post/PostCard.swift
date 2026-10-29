@@ -34,11 +34,66 @@ struct PostCard: View {
                 PollView(post: post, poll: poll)
             }
 
+            if collapsed, let best = post.bestComments?.first {
+                BestCommentView(post: post, comment: best)
+                    .padding(.horizontal, 16)
+            }
+
             PostActionsBar(post: post, linkToComments: collapsed)
                 .padding(.horizontal, 16)
         }
         .padding(.vertical, 14)
         .background(Color(.systemBackground))
+    }
+}
+
+/// The post's top comment, shown under it in feeds like on the site.
+struct BestCommentView: View {
+    let post: Post
+    let comment: Comment
+
+    private var blocks: [ContentBlock] {
+        BlockCache.blocks(id: comment.id, html: comment.text, attributes: comment.attributes)
+    }
+
+    var body: some View {
+        NavigationLink(value: Route.post(post)) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    AvatarView(url: comment.user.avatarURL, name: comment.user.username, size: 22)
+                    Text(comment.user.username)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Label(Formatting.rating(comment.rating), systemImage: "flame.fill")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(Color.accentColor)
+                        .labelStyle(.titleAndIcon)
+                }
+                ForEach(blocks.prefix(3)) { block in
+                    switch block {
+                    case .text(let text, _):
+                        Text(text)
+                            .font(.callout)
+                            .lineLimit(5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    case .attribute(let attribute):
+                        if attribute.kind == .picture || attribute.kind == .gif {
+                            RemoteImage(url: attribute.imageURL, maxPixelWidth: 600)
+                                .aspectRatio(attribute.image.aspectRatio, contentMode: .fit)
+                                .frame(maxWidth: 220, maxHeight: 220, alignment: .leading)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Лучший комментарий от \(comment.user.username)")
     }
 }
 
