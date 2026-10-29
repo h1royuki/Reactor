@@ -45,6 +45,12 @@ enum PostSource: Hashable {
     case weekTop
 
     var isPaged: Bool { self != .weekTop }
+
+    /// Only the main feed and tag feeds drop viewed posts; favorites, profiles and search stay complete.
+    var hidesSeen: Bool {
+        if case .tag = self { return true }
+        return false
+    }
 }
 
 enum API {

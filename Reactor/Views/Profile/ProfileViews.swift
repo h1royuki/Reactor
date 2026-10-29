@@ -257,6 +257,7 @@ struct SettingsView: View {
     @Bindable private var settings = AppSettings.shared
     @State private var confirmNSFW = false
     @State private var cacheSize = ImagePipeline.shared.diskUsage
+    @State private var seenCount = SeenPosts.shared.count
 
     var body: some View {
         Form {
@@ -274,6 +275,9 @@ struct SettingsView: View {
                 Toggle(isOn: $settings.fullQualityImages) {
                     Label("Картинки в полном качестве", systemImage: "photo")
                 }
+                Toggle(isOn: $settings.hideSeen) {
+                    Label("Скрывать просмотренные", systemImage: "eye.slash")
+                }
                 Picker(selection: $settings.defaultFeed) {
                     ForEach(PostLineType.allCases) { type in
                         Text(type.title).tag(type)
@@ -284,10 +288,17 @@ struct SettingsView: View {
             } header: {
                 Text("Контент")
             } footer: {
-                Text("Полное качество расходует больше трафика и памяти.")
+                Text("Просмотренным считается пост, который вы пролистали или открыли. Такие посты не показываются при обновлении ленты и в тегах. Полное качество картинок расходует больше трафика и памяти.")
             }
 
             Section("Хранилище") {
+                LabeledContent("Просмотренные посты", value: "\(seenCount)")
+                Button("Сбросить просмотренные", role: .destructive) {
+                    SeenPosts.shared.reset()
+                    seenCount = 0
+                    ToastCenter.shared.show("Просмотренные посты снова будут показываться")
+                }
+                .disabled(seenCount == 0)
                 LabeledContent("Кэш медиа", value: ByteCountFormatter.string(fromByteCount: Int64(cacheSize), countStyle: .file))
                 Button("Очистить кэш", role: .destructive) {
                     ImagePipeline.shared.clearCache()

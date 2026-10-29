@@ -118,7 +118,10 @@ struct PostDetailView: View {
             }
         }
         .refreshable { await load() }
-        .task { if !loaded { await load() } }
+        .task {
+            SeenPosts.shared.mark(postID)
+            if !loaded { await load() }
+        }
         .sheet(item: $replyTarget) { target in
             CommentComposer(target: target) {
                 Task { await load() }

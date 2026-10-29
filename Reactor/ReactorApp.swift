@@ -3,10 +3,15 @@ import UIKit
 
 @main
 struct ReactorApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             RootView()
                 .task { await AuthStore.shared.restore() }
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase != .active { SeenPosts.shared.flush() }
         }
     }
 }
