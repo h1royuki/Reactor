@@ -10,6 +10,10 @@ final class PostListModel {
     private(set) var error: String?
     private(set) var reachedEnd = false
     private(set) var loadedOnce = false
+    /// Viewed posts passed over during the current load (shown while scanning).
+    private(set) var skippedCount = 0
+    /// The scan hit its per-load limit without finding anything new; the user can ask to continue.
+    private(set) var exhaustedScan = false
 
     private var offset = 0
     private var seen = Set<String>()
@@ -48,34 +52,36 @@ final class PostListModel {
         if posts.isEmpty { await refresh() } else { await loadMore() }
     }
 
+    private struct Cursor {
+        var offset: Int
+        var known: Set<String>
+        var ended = false
+    }
+
+    private static let pageSize = 10
+    /// Pages checked per request while skipping viewed posts (ids only, so it stays light).
+    private static let scanPages = 20
+    /// Requests per load before asking the user whether to keep looking.
+    private static let maxScanRounds = 40
+
     private func load(reset: Bool, generation gen: Int) async {
         isLoading = true
+        exhaustedScan = false
+        skippedCount = 0
         if reset { error = nil }
         let nsfw = AppSettings.shared.showNSFW
         let hideSeen = AppSettings.shared.hideSeen && source.hidesSeen
-        var startOffset = reset ? 0 : offset
-        var seenIDs = reset ? Set<String>() : seen
-        var collected: [Post] = []
-        var ended = false
-        var attempts = 0
+        var cursor = Cursor(offset: reset ? 0 : offset, known: reset ? [] : seen)
         do {
-            repeat {
-                let batch = try await API.posts(source, offset: startOffset, nsfw: nsfw)
-                guard gen == generation else { return }
-                startOffset += batch.count
-                if batch.isEmpty || !source.isPaged { ended = true }
-                for post in batch where !seenIDs.contains(post.id) {
-                    seenIDs.insert(post.id)
-                    guard nsfw || !post.isAdult else { continue }
-                    guard !hideSeen || !SeenPosts.shared.contains(post.id) else { continue }
-                    collected.append(post)
-                }
-                attempts += 1
-                // Someone who has read a lot can hit many fully viewed pages in a row.
-            } while collected.isEmpty && !ended && attempts < (hideSeen ? 25 : 6)
-            offset = startOffset
-            seen = seenIDs
-            reachedEnd = ended
+            let collected: [Post]
+            if hideSeen, case .tag(let name, let line) = source {
+                collected = try await loadUnseen(name: name, line: line, cursor: &cursor, nsfw: nsfw, generation: gen)
+            } else {
+                collected = try await loadSequential(cursor: &cursor, nsfw: nsfw, generation: gen)
+            }
+            offset = cursor.offset
+            seen = cursor.known
+            reachedEnd = cursor.ended
             if reset { posts = collected } else { posts.append(contentsOf: collected) }
             loadedOnce = true
             loadedWithNSFW = nsfw
@@ -88,6 +94,104 @@ final class PostListModel {
             }
         }
         if gen == generation { isLoading = false }
+    }
+
+    private func checkCurrent(_ gen: Int) throws {
+        if gen != generation { throw CancellationError() }
+    }
+
+    /// Keeps posts not shown yet in this list, minus 18+ and (optionally) viewed ones.
+    private func accept(_ batch: [Post], cursor: inout Cursor, nsfw: Bool, hideSeen: Bool) -> [Post] {
+        var result: [Post] = []
+        for post in batch where cursor.known.insert(post.id).inserted {
+            guard nsfw || !post.isAdult else { continue }
+            guard !hideSeen || !SeenPosts.shared.contains(post.id) else { continue }
+            result.append(post)
+        }
+        return result
+    }
+
+    private func loadSequential(cursor: inout Cursor, nsfw: Bool, generation gen: Int) async throws -> [Post] {
+        var collected: [Post] = []
+        var attempts = 0
+        repeat {
+            let batch = try await API.posts(source, offset: cursor.offset, nsfw: nsfw)
+            try checkCurrent(gen)
+            cursor.offset += batch.count
+            if batch.isEmpty || !source.isPaged { cursor.ended = true }
+            collected += accept(batch, cursor: &cursor, nsfw: nsfw, hideSeen: false)
+            attempts += 1
+        } while collected.isEmpty && !cursor.ended && attempts < 6
+        return collected
+    }
+
+    /// Feed with viewed posts hidden. Fresh posts usually sit right at the cursor, so one normal page
+    /// goes first; when it is all viewed, the feed is scanned by ids 200 posts per request, jumping to
+    /// where the user stopped reading last time, and full posts are fetched only where something is new.
+    private func loadUnseen(name: String?, line: PostLineType, cursor: inout Cursor,
+                            nsfw: Bool, generation gen: Int) async throws -> [Post] {
+        let seenStore = SeenPosts.shared
+        let resumeKey = source.resumeKey
+        defer {
+            if let resumeKey { seenStore.updateResumeOffset(cursor.offset, for: resumeKey) }
+        }
+
+        let first = try await API.posts(source, offset: cursor.offset, nsfw: nsfw)
+        try checkCurrent(gen)
+        cursor.offset += first.count
+        if first.isEmpty {
+            cursor.ended = true
+            return []
+        }
+        let fresh = accept(first, cursor: &cursor, nsfw: nsfw, hideSeen: true)
+        if !fresh.isEmpty { return fresh }
+
+        var jumped = false
+        for _ in 0..<Self.maxScanRounds {
+            let offsets = (0..<Self.scanPages).map { cursor.offset + $0 * Self.pageSize }
+            let pages = try await API.tagPostStubs(name: name, line: line, offsets: offsets)
+            try checkCurrent(gen)
+
+            let filled = pages.prefix { !$0.isEmpty }
+            let hit = filled.firstIndex { page in
+                page.contains { stub in
+                    !cursor.known.contains(stub.id) && (nsfw || !stub.isAdult) && !seenStore.contains(stub.id)
+                }
+            }
+
+            guard let hit else {
+                skippedCount += filled.reduce(0) { $0 + $1.count }
+                if filled.count < pages.count {
+                    cursor.ended = true
+                    return []
+                }
+                cursor.offset = offsets[offsets.count - 1] + Self.pageSize
+                // Everything near the top is read: continue from where reading stopped last time.
+                // The list only grows at the top, so the old position now sits a bit lower; starting
+                // 200 posts earlier stays on the safe side.
+                if !jumped, let resumeKey, let resume = seenStore.resumeOffset(for: resumeKey),
+                   resume - 200 > cursor.offset {
+                    cursor.offset = resume - 200
+                    jumped = true
+                }
+                continue
+            }
+
+            skippedCount += filled.prefix(hit).reduce(0) { $0 + $1.count }
+            let pageOffsets = [offsets[hit], offsets[hit] + Self.pageSize]
+            let full = try await API.tagPosts(name: name, line: line, offsets: pageOffsets)
+            try checkCurrent(gen)
+            if full[1].isEmpty {
+                cursor.offset = pageOffsets[0] + full[0].count
+                if full[0].isEmpty { cursor.ended = true }
+            } else {
+                cursor.offset = pageOffsets[1] + full[1].count
+            }
+            let result = accept(full.flatMap { $0 }, cursor: &cursor, nsfw: nsfw, hideSeen: true)
+            if !result.isEmpty || cursor.ended { return result }
+        }
+        exhaustedScan = true
+        return []
     }
 }
 
@@ -189,11 +293,34 @@ struct PostFeed<Header: View>: View {
             }
             .padding(.top, model.posts.isEmpty ? 80 : 0)
         } else if model.isLoading {
-            ProgressView()
-                .controlSize(.large)
-                .padding(40)
-                .frame(maxWidth: .infinity)
-                .padding(.top, model.posts.isEmpty ? 80 : 0)
+            VStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.large)
+                if model.skippedCount > 0 {
+                    Text("Пропускаем просмотренные: \(model.skippedCount)")
+                        .font(.footnote.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                }
+            }
+            .padding(40)
+            .frame(maxWidth: .infinity)
+            .padding(.top, model.posts.isEmpty ? 80 : 0)
+        } else if model.exhaustedScan {
+            VStack(spacing: 12) {
+                Text("Подряд идут только просмотренные посты")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button("Искать дальше") {
+                    Task { await model.loadMore() }
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+            }
+            .padding(32)
+            .frame(maxWidth: .infinity)
+            .padding(.top, model.posts.isEmpty ? 80 : 0)
         } else if model.loadedOnce && model.posts.isEmpty {
             ContentUnavailableView(emptyTitle, systemImage: emptyIcon, description: Text(emptyDescription))
                 .padding(.top, 60)
@@ -202,6 +329,11 @@ struct PostFeed<Header: View>: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(30)
+        } else if model.loadedOnce {
+            // Safety net: reaching the bottom always asks for more, even if no card triggered it.
+            Color.clear
+                .frame(height: 1)
+                .onAppear { Task { await model.loadMore() } }
         }
     }
 }

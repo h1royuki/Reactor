@@ -51,6 +51,21 @@ enum PostSource: Hashable {
         if case .tag = self { return true }
         return false
     }
+
+    /// Stable key for remembering how deep a feed has been read.
+    var resumeKey: String? {
+        guard case .tag(let name, let type) = self else { return nil }
+        return "\(name ?? "")|\(type.rawValue)"
+    }
+}
+
+/// Just enough of a post to decide whether it still has to be shown.
+struct PostStub: Decodable {
+    let id: String
+    let nsfw: Bool
+    let unsafe: Bool
+
+    var isAdult: Bool { nsfw || unsafe }
 }
 
 enum API {
@@ -122,6 +137,29 @@ enum API {
             }
             throw lastError
         }
+    }
+
+    /// Several pages of a tag feed in one request (GraphQL aliases): 20 pages cost about as much as one.
+    private static func tagPages<T: Decodable>(_ type: T.Type, name: String?, line: PostLineType, offsets: [Int],
+                                               fields: String, fragments: String = "") async throws -> [[T]] {
+        let aliases = offsets.enumerated()
+            .map { "p\($0.offset): posts(offset: \($0.element)) { \(fields) }" }
+            .joined(separator: " ")
+        let q = """
+        query($name: String, $type: PostLineType!) { tag(name: $name) { postPager(type: $type) { \(aliases) } } }
+        \(fragments)
+        """
+        let pages = try await client.fetch([String: [T]].self, q, variables: ["name": name, "type": line.rawValue],
+                                           path: ["tag", "postPager"])
+        return offsets.indices.map { pages["p\($0)"] ?? [] }
+    }
+
+    static func tagPostStubs(name: String?, line: PostLineType, offsets: [Int]) async throws -> [[PostStub]] {
+        try await tagPages(PostStub.self, name: name, line: line, offsets: offsets, fields: "id nsfw unsafe")
+    }
+
+    static func tagPosts(name: String?, line: PostLineType, offsets: [Int]) async throws -> [[Post]] {
+        try await tagPages(Post.self, name: name, line: line, offsets: offsets, fields: "...PostFields", fragments: GQL.postFields)
     }
 
     static func postWithComments(id: String) async throws -> (Post, [Comment]) {

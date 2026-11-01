@@ -11,6 +11,9 @@ final class SeenPosts {
     private var ids = Set<String>()
     private var order: [String] = []
     private var saveTask: Task<Void, Never>?
+    /// Per feed: how far down the user has read, so skipping viewed posts can jump instead of crawl.
+    private var resumeOffsets: [String: Int] =
+        (UserDefaults.standard.dictionary(forKey: "seenResumeOffsets") as? [String: Int]) ?? [:]
 
     private let fileURL: URL = {
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -45,7 +48,20 @@ final class SeenPosts {
     func reset() {
         ids.removeAll()
         order.removeAll()
+        resumeOffsets.removeAll()
+        UserDefaults.standard.removeObject(forKey: "seenResumeOffsets")
         scheduleSave()
+    }
+
+    func resumeOffset(for key: String) -> Int? {
+        resumeOffsets[key]
+    }
+
+    /// Only moves forward: reading a few fresh posts at the top must not lose the deeper position.
+    func updateResumeOffset(_ offset: Int, for key: String) {
+        guard offset > (resumeOffsets[key] ?? 0) else { return }
+        resumeOffsets[key] = offset
+        UserDefaults.standard.set(resumeOffsets, forKey: "seenResumeOffsets")
     }
 
     /// Writes pending changes right away (the app is going to the background).
