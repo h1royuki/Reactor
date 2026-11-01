@@ -154,11 +154,14 @@ struct PostActionsBar: View {
     let post: Post
     var linkToComments: Bool
 
+    @State private var downloading = false
+    @State private var shareItem: ShareItem?
+
     private var store: InteractionStore { .shared }
 
     var body: some View {
         let state = store.state(for: post)
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             VoteControl(rating: state.rating, vote: state.vote, busy: store.pending.contains(post.id)) { plus in
                 Task { await store.vote(post: post, plus: plus) }
             }
@@ -172,7 +175,26 @@ struct PostActionsBar: View {
                 commentsLabel
             }
 
-            Spacer()
+            Spacer(minLength: 0)
+
+            if MediaSaver.hasMedia(post) {
+                Button(action: download) {
+                    Group {
+                        if downloading {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.down.to.line")
+                        }
+                    }
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, height: 34)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(downloading)
+                .accessibilityLabel("Скачать")
+            }
 
             Button {
                 Task { await store.toggleFavorite(post: post) }
@@ -180,7 +202,7 @@ struct PostActionsBar: View {
                 Image(systemName: state.favorite ? "bookmark.fill" : "bookmark")
                     .font(.body.weight(.medium))
                     .foregroundStyle(state.favorite ? Color.accentColor : Color.secondary)
-                    .frame(width: 38, height: 34)
+                    .frame(width: 36, height: 34)
                     .contentShape(Rectangle())
                     .symbolEffect(.bounce, value: state.favorite)
             }
@@ -190,10 +212,34 @@ struct PostActionsBar: View {
                 Image(systemName: "square.and.arrow.up")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .frame(width: 38, height: 34)
+                    .frame(width: 36, height: 34)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+        }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: [item.url])
+                .presentationDetents([.medium, .large])
+        }
+    }
+
+    /// Pictures go straight to Photos; a WebM video (Photos can't take it) opens the share sheet,
+    /// where "Save to Files" is available.
+    private func download() {
+        downloading = true
+        Task {
+            defer { downloading = false }
+            do {
+                if !MediaSaver.photos(in: post).isEmpty {
+                    let count = try await MediaSaver.savePhotos(of: post)
+                    Haptics.tap()
+                    ToastCenter.shared.show(count == 1 ? "Сохранено в «Фото»" : "Сохранено в «Фото»: \(count)")
+                } else {
+                    shareItem = ShareItem(url: try await MediaSaver.videoFile(of: post))
+                }
+            } catch {
+                ToastCenter.shared.show(error)
+            }
         }
     }
 
@@ -206,6 +252,8 @@ struct PostActionsBar: View {
                 .foregroundStyle(.primary)
         }
         .font(.subheadline.weight(.semibold))
+        .lineLimit(1)
+        .fixedSize()
         .padding(.horizontal, 12)
         .frame(height: 34)
         .background(Color(.tertiarySystemFill), in: Capsule())
@@ -236,6 +284,9 @@ struct VoteControl: View {
                 } else {
                     Text(Formatting.rating(rating))
                         .monospacedDigit()
+                        .lineLimit(1)
+                        // Never wrap "114.3" onto two lines when the row is tight.
+                        .fixedSize()
                         .contentTransition(.numericText(value: rating))
                 }
             }
