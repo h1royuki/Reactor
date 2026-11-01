@@ -248,7 +248,10 @@ struct PostFeed<Header: View>: View {
                                 if scrolledPast { SeenPosts.shared.mark(post.id) }
                             }
                             .onAppear {
-                                if model.posts.suffix(4).contains(where: { $0.id == post.id }) {
+                                if let index = model.posts.firstIndex(where: { $0.id == post.id }) {
+                                    ImagePrefetcher.shared.prefetch(model.posts.dropFirst(index + 1).prefix(ImagePrefetcher.lookahead))
+                                }
+                                if model.posts.suffix(8).contains(where: { $0.id == post.id }) {
                                     Task { await model.loadMore() }
                                 }
                             }

@@ -38,12 +38,8 @@ struct AttributeView: View {
         }
     }
 
-    /// The CDN's display copy is at most 811 px wide, which a phone screen (1170-1290 px) upscales.
-    /// Originals up to ~1300 px are barely bigger, so those load in full; larger ones use the display
-    /// copy unless full quality is switched on.
     private var feedImageURL: URL? {
-        if settings.fullQualityImages || attribute.image.width <= 1300 { return attribute.fullImageURL }
-        return attribute.imageURL
+        attribute.feedImageURL(fullQuality: settings.fullQualityImages)
     }
 
     private func mediaFrame<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {

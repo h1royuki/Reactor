@@ -48,6 +48,14 @@ extension Attribute {
         URL(string: "\(MediaURL.host)/\(folder)/full/picture-\(number).\(MediaURL.fileExtension(image.type))")
     }
 
+    /// Picture shown in feeds. The CDN's display copy is at most 811 px wide, which a phone screen
+    /// (1170-1290 px) upscales; originals up to ~1300 px are barely bigger, so those load in full,
+    /// larger ones use the display copy unless full quality is switched on.
+    func feedImageURL(fullQuality: Bool) -> URL? {
+        if fullQuality || image.width <= 1300 { return fullImageURL }
+        return imageURL
+    }
+
     /// Still frame for gifs and videos.
     var posterURL: URL? {
         URL(string: "\(MediaURL.host)/\(folder)/static/picture-\(number).jpeg")
