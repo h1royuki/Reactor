@@ -124,7 +124,7 @@ struct FeedHeader: View {
     }
 }
 
-/// Dark-leaning blur for bars: content shows through softly without turning the bar grey.
+/// Blur tinted with the app background (dark or light): content shows through softly without turning the bar grey.
 struct ChromeBackground: View {
     var body: some View {
         Rectangle()

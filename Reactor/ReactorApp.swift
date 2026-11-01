@@ -51,6 +51,7 @@ struct RootView: View {
                 .animation(.snappy(duration: 0.3), value: tabBarVisible)
         }
         .overlay(alignment: .top) { ToastOverlay() }
+        .onAppear { AppSettings.shared.applyTheme() }
         .onChange(of: chrome.selectedTab) {
             opened.insert(chrome.selectedTab)
             chrome.resetScrollTracking()

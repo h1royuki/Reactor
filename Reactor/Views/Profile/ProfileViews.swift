@@ -261,6 +261,17 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Оформление") {
+                Picker("Тема", selection: $settings.theme) {
+                    ForEach(AppTheme.allCases) { theme in
+                        Text(theme.title).tag(theme)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+
             Section {
                 Toggle(isOn: Binding(
                     get: { settings.showNSFW },
