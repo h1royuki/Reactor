@@ -251,7 +251,9 @@ struct PostFeed<Header: View>: View {
                                 if let index = model.posts.firstIndex(where: { $0.id == post.id }) {
                                     ImagePrefetcher.shared.prefetch(model.posts.dropFirst(index + 1).prefix(ImagePrefetcher.lookahead))
                                 }
-                                if model.posts.suffix(8).contains(where: { $0.id == post.id }) {
+                                // The next page must arrive before prefetching needs its posts,
+                                // plus a little time for the request itself.
+                                if model.posts.suffix(ImagePrefetcher.lookahead + 2).contains(where: { $0.id == post.id }) {
                                     Task { await model.loadMore() }
                                 }
                             }
