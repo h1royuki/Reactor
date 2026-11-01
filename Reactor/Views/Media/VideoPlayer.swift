@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import UIKit
 import WebKit
@@ -8,16 +9,36 @@ extension EnvironmentValues {
 }
 
 /// Global sound state shared by all players, like Reddit.
+/// Muted videos mix with other audio and respect the silent switch; turning sound on
+/// switches the session to playback so it is actually heard.
 @MainActor
 @Observable
 final class VideoAudio {
     static let shared = VideoAudio()
-    var muted = true
+
+    var muted = true {
+        didSet { configureSession() }
+    }
+
+    private init() {
+        configureSession()
+    }
+
+    private func configureSession() {
+        let session = AVAudioSession.sharedInstance()
+        if muted {
+            try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+        } else {
+            try? session.setCategory(.playback, mode: .moviePlayback)
+            try? session.setActive(true)
+        }
+    }
 }
 
 // MARK: - Controller
 
-/// Drives an HTML5 `<video>` inside a WKWebView (joyreactor serves WebM, which only WebKit can play on iOS).
+/// Drives one video. Plays the site's mp4 with AVPlayer; if there is no mp4 (or it fails),
+/// `usesWebFallback` flips and a WKWebView plays the WebM instead, through the same API.
 @MainActor
 @Observable
 final class VideoController {
@@ -25,11 +46,105 @@ final class VideoController {
     private(set) var isBuffering = true
     private(set) var currentTime: Double = 0
     private(set) var duration: Double = 0
+    private(set) var usesWebFallback = false
 
     @ObservationIgnored weak var webView: WKWebView?
+    @ObservationIgnored private(set) var player: AVPlayer?
+    @ObservationIgnored private var timeObserver: Any?
+    @ObservationIgnored private var observations: [NSKeyValueObservation] = []
+    @ObservationIgnored private var endObserver: NSObjectProtocol?
 
-    func play() { run("v.play()") }
-    func pause() { run("v.pause()") }
+    /// Creates (or returns the running) native player for `url`.
+    func startNative(url: URL, muted: Bool, startTime: Double) -> AVPlayer {
+        if let player { return player }
+        let item = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: item)
+        player.isMuted = muted
+        player.actionAtItemEnd = .none
+        self.player = player
+        isBuffering = true
+
+        observations = [
+            item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                let status = item.status
+                let seconds = item.duration.seconds
+                Task { @MainActor in self?.itemStatusChanged(status, duration: seconds) }
+            },
+            player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
+                let status = player.timeControlStatus
+                Task { @MainActor in self?.timeControlChanged(status) }
+            },
+        ]
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
+                                                      queue: .main) { [weak self] time in
+            let seconds = time.seconds
+            MainActor.assumeIsolated {
+                if seconds.isFinite { self?.currentTime = seconds }
+            }
+        }
+        // Loop like a gif.
+        endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item,
+                                                             queue: .main) { [weak player] _ in
+            player?.seek(to: .zero)
+            player?.play()
+        }
+        if startTime > 0 {
+            player.seek(to: CMTime(seconds: startTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+        player.play()
+        return player
+    }
+
+    /// Releases the native player (its view went away).
+    func stop() {
+        if let timeObserver, let player { player.removeTimeObserver(timeObserver) }
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        observations.forEach { $0.invalidate() }
+        observations = []
+        timeObserver = nil
+        endObserver = nil
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        player = nil
+        isPlaying = false
+    }
+
+    private func itemStatusChanged(_ status: AVPlayerItem.Status, duration seconds: Double) {
+        switch status {
+        case .readyToPlay:
+            if seconds.isFinite, seconds > 0 { duration = seconds }
+        case .failed:
+            // No mp4 for this video (very old or just uploaded): hand over to the WebM player.
+            stop()
+            usesWebFallback = true
+        default:
+            break
+        }
+    }
+
+    private func timeControlChanged(_ status: AVPlayer.TimeControlStatus) {
+        switch status {
+        case .playing:
+            isPlaying = true
+            isBuffering = false
+        case .waitingToPlayAtSpecifiedRate:
+            isPlaying = true
+            isBuffering = true
+        case .paused:
+            isPlaying = false
+            isBuffering = false
+        @unknown default:
+            break
+        }
+    }
+
+    func play() {
+        if let player { player.play() } else { run("v.play()") }
+    }
+
+    func pause() {
+        if let player { player.pause() } else { run("v.pause()") }
+    }
 
     func toggle() {
         isPlaying ? pause() : play()
@@ -37,10 +152,15 @@ final class VideoController {
 
     func seek(to time: Double) {
         currentTime = time
-        run("v.currentTime = \(max(0, time))")
+        if let player {
+            player.seek(to: CMTime(seconds: max(0, time), preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        } else {
+            run("v.currentTime = \(max(0, time))")
+        }
     }
 
     func setMuted(_ muted: Bool) {
+        player?.isMuted = muted
         run("v.muted = \(muted)")
     }
 
@@ -58,6 +178,61 @@ final class VideoController {
 
     private func run(_ script: String) {
         webView?.evaluateJavaScript("if (window.v) { \(script) }", completionHandler: nil)
+    }
+}
+
+final class PlayerContainerView: UIView {
+    override static var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}
+
+/// AVPlayer surface for the mp4.
+struct NativeVideoView: UIViewRepresentable {
+    let controller: VideoController
+    let url: URL
+    var muted = true
+    var startTime: Double = 0
+
+    final class Coordinator {
+        let controller: VideoController
+        init(controller: VideoController) { self.controller = controller }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(controller: controller) }
+
+    func makeUIView(context: Context) -> PlayerContainerView {
+        let view = PlayerContainerView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        view.playerLayer.videoGravity = .resizeAspect
+        view.playerLayer.player = controller.startNative(url: url, muted: muted, startTime: startTime)
+        return view
+    }
+
+    func updateUIView(_ view: PlayerContainerView, context: Context) {}
+
+    static func dismantleUIView(_ view: PlayerContainerView, coordinator: Coordinator) {
+        view.playerLayer.player = nil
+        coordinator.controller.stop()
+    }
+}
+
+/// Native mp4 player, or the WebM one when the mp4 is unavailable.
+struct VideoSurface: View {
+    let controller: VideoController
+    let attribute: Attribute
+    var muted = true
+    var startTime: Double = 0
+
+    var body: some View {
+        if let mp4 = attribute.mp4URL, !controller.usesWebFallback {
+            NativeVideoView(controller: controller, url: mp4, muted: muted, startTime: startTime)
+        } else {
+            WebVideoView(controller: controller,
+                         sources: attribute.videoURLs.filter { $0.pathExtension != "mp4" },
+                         poster: attribute.posterURL, muted: muted,
+                         startTime: max(startTime, controller.currentTime))
+        }
     }
 }
 
@@ -198,8 +373,7 @@ struct VideoAttributeView: View {
             RemoteImage(url: attribute.posterURL, maxPixelWidth: Display.pixelWidth)
 
             if active {
-                WebVideoView(controller: controller, sources: attribute.videoURLs,
-                             poster: attribute.posterURL, muted: audio.muted)
+                VideoSurface(controller: controller, attribute: attribute, muted: audio.muted)
             }
 
             Color.clear
@@ -337,8 +511,7 @@ struct VideoViewer: View {
                 .opacity(1 - Double(min(abs(dragOffset) / 400, 0.85)))
                 .ignoresSafeArea()
 
-            WebVideoView(controller: controller, sources: attribute.videoURLs, poster: attribute.posterURL,
-                         muted: audio.muted, startTime: startTime)
+            VideoSurface(controller: controller, attribute: attribute, muted: audio.muted, startTime: startTime)
                 .aspectRatio(attribute.image.aspectRatio, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .offset(y: dragOffset)
