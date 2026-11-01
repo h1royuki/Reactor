@@ -8,8 +8,9 @@ import Foundation
 final class ImagePrefetcher {
     static let shared = ImagePrefetcher()
 
-    /// Posts to look ahead of the one that just appeared.
-    static let lookahead = 6
+    /// Posts to look ahead of the one that just appeared: generous on Wi-Fi, lighter on
+    /// cellular and Low Data Mode, where posts left unseen at the end of a session cost traffic.
+    static var lookahead: Int { NetworkStatus.shared.isExpensive ? 3 : 6 }
     /// The feed card shows at most this many media items before "show more".
     private static let mediaPerPost = 5
 
