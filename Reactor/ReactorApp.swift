@@ -52,7 +52,11 @@ struct RootView: View {
                 .animation(.snappy(duration: 0.3), value: tabBarVisible)
         }
         .overlay(alignment: .top) { ToastOverlay() }
-        .onAppear { AppSettings.shared.applyTheme() }
+        .onAppear {
+            AppSettings.shared.applyTheme()
+            // Start watching the connection before the first prefetch asks about it.
+            _ = NetworkStatus.shared
+        }
         .onChange(of: chrome.selectedTab) {
             opened.insert(chrome.selectedTab)
             chrome.resetScrollTracking()
