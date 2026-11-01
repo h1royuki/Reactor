@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Posts the user has already scrolled past or opened, persisted across launches.
 /// Feeds that hide viewed posts skip these when loading new pages.
@@ -7,6 +8,8 @@ final class SeenPosts {
     static let shared = SeenPosts()
 
     private static let limit = 50_000
+    /// Serial, so snapshots land on disk in the order they were taken.
+    private static let writeQueue = DispatchQueue(label: "SeenPosts.write", qos: .utility)
 
     private var ids = Set<String>()
     private var order: [String] = []
@@ -78,6 +81,7 @@ final class SeenPosts {
         saveTask = Task {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
+            saveTask = nil
             save()
         }
     }
@@ -85,10 +89,14 @@ final class SeenPosts {
     private func save() {
         let snapshot = order
         let url = fileURL
-        Task.detached(priority: .utility) {
-            guard let data = try? JSONEncoder().encode(snapshot) else { return }
-            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: url, options: .atomic)
+        // Finish the write even if the app is being suspended.
+        let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "SeenPosts.save")
+        Self.writeQueue.async {
+            if let data = try? JSONEncoder().encode(snapshot) {
+                try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? data.write(to: url, options: .atomic)
+            }
+            DispatchQueue.main.async { UIApplication.shared.endBackgroundTask(backgroundTask) }
         }
     }
 }

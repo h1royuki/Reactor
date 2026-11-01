@@ -122,6 +122,9 @@ final class PostListModel {
             collected += accept(batch, cursor: &cursor, nsfw: nsfw, hideSeen: false)
             attempts += 1
         } while collected.isEmpty && !cursor.ended && attempts < 6
+        // Six pages in a row were all filtered out (e.g. 18+): let the user keep looking
+        // instead of claiming the feed is empty.
+        if collected.isEmpty && !cursor.ended { exhaustedScan = true }
         return collected
     }
 
@@ -271,6 +274,9 @@ struct PostFeed<Header: View>: View {
         .background(Color(.systemGroupedBackground))
         .refreshable { await model.refresh() }
         .task { await model.loadIfNeeded() }
+        // Tabs stay alive while hidden, so .task does not rerun after a settings change.
+        .onChange(of: AppSettings.shared.showNSFW) { Task { await model.refresh() } }
+        .onChange(of: AppSettings.shared.hideSeen) { Task { await model.refresh() } }
     }
 
     private var hidingSeen: Bool {
@@ -308,7 +314,7 @@ struct PostFeed<Header: View>: View {
             .padding(.top, model.posts.isEmpty ? 80 : 0)
         } else if model.exhaustedScan {
             VStack(spacing: 12) {
-                Text("Подряд идут только просмотренные посты")
+                Text("Подряд идут только скрытые посты — просмотренные или 18+")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

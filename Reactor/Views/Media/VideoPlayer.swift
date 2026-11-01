@@ -6,6 +6,8 @@ import WebKit
 extension EnvironmentValues {
     /// Post that owns the media being rendered (used by the fullscreen video player).
     @Entry var currentPost: Post? = nil
+    /// False while the tab holding this view is kept alive but hidden; media must stop there.
+    @Entry var tabIsVisible: Bool = true
 }
 
 /// Global sound state shared by all players, like Reddit.
@@ -359,6 +361,7 @@ struct VideoAttributeView: View {
     var autoplay: Bool
 
     @Environment(\.currentPost) private var post
+    @Environment(\.tabIsVisible) private var tabIsVisible
     @State private var controller = VideoController()
     @State private var active = false
     @State private var showControls = false
@@ -443,6 +446,16 @@ struct VideoAttributeView: View {
             if !fullscreen { active = false }
         }
         .onChange(of: audio.muted) { controller.setMuted(audio.muted) }
+        // Hidden tabs never get onDisappear, so stop explicitly when switching away.
+        .onChange(of: tabIsVisible) {
+            if tabIsVisible {
+                if autoplay { active = true }
+            } else {
+                hideTask?.cancel()
+                showControls = false
+                active = false
+            }
+        }
         .onChange(of: fullscreen) {
             if fullscreen {
                 resumeAfterFullscreen = controller.isPlaying
@@ -573,7 +586,7 @@ struct VideoViewer: View {
             Spacer()
             Menu {
                 if let post {
-                    Link(destination: post.webURL) {
+                    Button { UIApplication.shared.open(post.webURL) } label: {
                         Label("Открыть в Safari", systemImage: "safari")
                     }
                 }

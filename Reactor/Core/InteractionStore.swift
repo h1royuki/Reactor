@@ -15,6 +15,12 @@ final class InteractionStore {
     private var posts: [String: Snapshot] = [:]
     private var comments: [String: Snapshot] = [:]
     private(set) var pending: Set<String> = []
+    /// Poll results after voting, so the feed card and the post screen agree.
+    private(set) var polls: [String: Poll] = [:]
+
+    func setPoll(_ poll: Poll, for postID: String) {
+        polls[postID] = poll
+    }
 
     func state(for post: Post) -> Snapshot {
         posts[post.id] ?? Snapshot(rating: post.rating, vote: post.vote?.power, favorite: post.favorite)

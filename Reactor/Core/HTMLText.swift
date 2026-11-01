@@ -121,7 +121,10 @@ enum HTMLText {
         var index = html.startIndex
         var textStart = index
         while index < html.endIndex {
-            guard html[index] == "<", let close = html[index...].firstIndex(of: ">") else {
+            let next = html.index(after: index)
+            guard html[index] == "<", next < html.endIndex,
+                  html[next].isLetter || html[next] == "/" || html[next] == "!",
+                  let close = html[index...].firstIndex(of: ">") else {
                 index = html.index(after: index)
                 continue
             }

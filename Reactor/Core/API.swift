@@ -308,10 +308,10 @@ enum API {
         let q = """
         mutation($id: ID!, $t: String!) { comment(id: $id, text: $t) { errorCode comment { id } } }
         """
-        struct R: Decodable { let errorCode: Int; let comment: ParentRef? }
+        struct R: Decodable { let errorCode: Int?; let comment: ParentRef? }
         let result = try await client.fetch(R.self, q, variables: ["id": id, "t": text], path: ["comment"])
         if result.comment == nil {
-            throw APIError.server("Не удалось отправить комментарий (код \(result.errorCode))")
+            throw APIError.server("Не удалось отправить комментарий (код \(result.errorCode ?? 0))")
         }
     }
 }

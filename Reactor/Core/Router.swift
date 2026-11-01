@@ -37,7 +37,8 @@ final class Router {
         guard let host = url.host?.lowercased(),
               host.hasSuffix("reactor.cc") || host.hasSuffix("joyreactor.com") || host.hasSuffix("reactor.com")
         else { return nil }
-        let components = url.pathComponents.filter { $0 != "/" }
+        // Work on the raw path: on the site "+" means a space, while a real plus is "%2B".
+        let components = url.path(percentEncoded: true).split(separator: "/").map(String.init)
         guard components.count >= 2 else {
             if components.isEmpty, let sub = host.split(separator: ".").first,
                !["joyreactor", "www", "m", "reactor", "old"].contains(String(sub)) {
@@ -45,15 +46,16 @@ final class Router {
             }
             return nil
         }
-        let value = components[1].removingPercentEncoding ?? components[1]
+        let raw = components[1].replacingOccurrences(of: "+", with: " ")
+        let value = raw.removingPercentEncoding ?? raw
         switch components[0] {
         case "post":
             guard Int(value) != nil else { return nil }
             return .postID(NodeID.encode(type: "Post", number: value))
         case "tag":
-            return .tag(value.replacingOccurrences(of: "+", with: " "))
+            return .tag(value)
         case "user":
-            return .user(value.replacingOccurrences(of: "+", with: " "))
+            return .user(value)
         default:
             return nil
         }

@@ -66,17 +66,20 @@ struct GIFView: View {
     let url: URL?
     var posterURL: URL?
 
+    @Environment(\.tabIsVisible) private var tabIsVisible
     @State private var data: Data?
     @State private var failed = false
 
     var body: some View {
         ZStack {
-            if let data, let url {
+            if let data, let url, tabIsVisible {
                 AnimatedImage(data: data, url: url)
             } else {
                 RemoteImage(url: posterURL, maxPixelWidth: 800)
                     .overlay {
-                        if failed {
+                        if data != nil {
+                            EmptyView()
+                        } else if failed {
                             Image(systemName: "exclamationmark.triangle")
                                 .foregroundStyle(.secondary)
                         } else {
@@ -170,7 +173,14 @@ final class ZoomScrollView: UIScrollView, UIScrollViewDelegate {
 
     func setImage(_ image: UIImage?) {
         guard imageView.image !== image else { return }
+        let previous = imageView.image
         imageView.image = image
+        // The full-size copy of the same picture replaces the preview without resetting
+        // the zoom or scroll position the user already has.
+        if let previous, let image, previous.size.height > 0, image.size.height > 0,
+           abs(previous.size.width / previous.size.height - image.size.width / image.size.height) < 0.01 {
+            return
+        }
         lastBoundsSize = .zero
         setNeedsLayout()
     }

@@ -39,6 +39,7 @@ struct RootView: View {
                     TabRoot(router: router(tab)) {
                         rootView(for: tab)
                     }
+                    .environment(\.tabIsVisible, selected)
                     .opacity(selected ? 1 : 0)
                     .allowsHitTesting(selected)
                     .accessibilityHidden(!selected)

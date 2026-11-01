@@ -136,7 +136,7 @@ struct PostHeader: View {
                 } label: {
                     Label("Скопировать ссылку", systemImage: "link")
                 }
-                Link(destination: post.webURL) {
+                Button { UIApplication.shared.open(post.webURL) } label: {
                     Label("Открыть в Safari", systemImage: "safari")
                 }
             } label: {

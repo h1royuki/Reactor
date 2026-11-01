@@ -101,21 +101,23 @@ struct PostContentView: View {
 
 struct PollView: View {
     let post: Post
-    @State private var poll: Poll
+    let poll: Poll
     @State private var voting = false
 
     init(post: Post, poll: Poll) {
         self.post = post
-        _poll = State(initialValue: poll)
+        self.poll = poll
     }
 
-    private var total: Int { max(poll.answers.reduce(0) { $0 + $1.count }, 1) }
+    private var current: Poll { InteractionStore.shared.polls[post.id] ?? poll }
+
+    private var total: Int { max(current.answers.reduce(0) { $0 + $1.count }, 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(poll.question, systemImage: "chart.bar.xaxis")
+            Label(current.question, systemImage: "chart.bar.xaxis")
                 .font(.headline)
-            ForEach(poll.answers) { answer in
+            ForEach(current.answers) { answer in
                 Button {
                     vote(answer)
                 } label: {
@@ -123,14 +125,14 @@ struct PollView: View {
                     ZStack(alignment: .leading) {
                         GeometryReader { proxy in
                             RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.accentColor.opacity(poll.voted ? 0.25 : 0))
+                                .fill(Color.accentColor.opacity(current.voted ? 0.25 : 0))
                                 .frame(width: proxy.size.width * share)
                         }
                         HStack {
                             Text(answer.answer)
                                 .multilineTextAlignment(.leading)
                             Spacer()
-                            if poll.voted {
+                            if current.voted {
                                 Text("\(Int((share * 100).rounded()))%")
                                     .monospacedDigit()
                                     .foregroundStyle(.secondary)
@@ -142,9 +144,9 @@ struct PollView: View {
                     .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
                 }
                 .buttonStyle(.plain)
-                .disabled(poll.voted || voting)
+                .disabled(current.voted || voting)
             }
-            if poll.voted {
+            if current.voted {
                 Text("Голосов: \(total)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -162,7 +164,7 @@ struct PollView: View {
         Task {
             defer { voting = false }
             do {
-                poll = try await API.pollVote(answer: answer.id, postID: post.id)
+                InteractionStore.shared.setPoll(try await API.pollVote(answer: answer.id, postID: post.id), for: post.id)
             } catch {
                 ToastCenter.shared.show(error)
             }
