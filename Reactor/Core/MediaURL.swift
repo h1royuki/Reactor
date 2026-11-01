@@ -80,10 +80,25 @@ extension Attribute {
         case "YOUTUBE": return URL(string: "https://www.youtube.com/watch?v=\(value)")
         case "VIMEO": return URL(string: "https://vimeo.com/\(value)")
         case "COUB": return URL(string: "https://coub.com/view/\(value)")
-        case "SOUNDCLOUD": return URL(string: "https://soundcloud.com/\(value)")
-        case "BANDCAMP": return URL(string: "https://bandcamp.com/EmbeddedPlayer/\(value)")
+        case "SOUNDCLOUD":
+            // {"url":"https://api.soundcloud.com/tracks/<id>","height":300}
+            guard let track = embedJSONURL(value) else { return nil }
+            var components = URLComponents(string: "https://w.soundcloud.com/player/")
+            components?.queryItems = [URLQueryItem(name: "url", value: track)]
+            return components?.url
+        case "BANDCAMP":
+            // {"url":"album=123/size=large/bgcol=333333/linkcol=0f91ff/transparent=true/","height":1070,"width":700}
+            guard let path = embedJSONURL(value) else { return nil }
+            return URL(string: "https://bandcamp.com/EmbeddedPlayer/\(path)")
         default: return nil
         }
+    }
+
+    /// SoundCloud and Bandcamp embeds keep a small JSON object in `value`, not a bare id.
+    private func embedJSONURL(_ value: String) -> String? {
+        guard let data = value.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["url"] as? String
     }
 
     var embedThumbnailURL: URL? {
