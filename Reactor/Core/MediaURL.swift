@@ -53,16 +53,23 @@ extension Attribute {
         URL(string: "\(MediaURL.host)/\(folder)/static/picture-\(number).jpeg")
     }
 
-    /// Candidate video sources, best first.
+    /// H.264 copy the site makes for video gifs (may be missing on very old or just uploaded ones).
+    var mp4URL: URL? {
+        URL(string: "\(MediaURL.host)/\(folder)/mp4/picture-\(number).mp4")
+    }
+
+    /// Candidate video sources, best first: mp4 decodes in hardware on iOS, WebM is the fallback.
     var videoURLs: [URL] {
-        var urls: [String] = ["\(MediaURL.host)/\(folder)/webm/picture-\(number).webm"]
-        if image.type == "MP4" {
-            urls.insert("\(MediaURL.host)/\(folder)/mp4/picture-\(number).mp4", at: 0)
-            urls.append("\(MediaURL.host)/\(folder)/picture-\(number).mp4")
-        } else {
-            urls.append("\(MediaURL.host)/\(folder)/picture-\(number).\(MediaURL.fileExtension(image.type))")
-        }
+        var urls: [String] = [
+            "\(MediaURL.host)/\(folder)/mp4/picture-\(number).mp4",
+            "\(MediaURL.host)/\(folder)/webm/picture-\(number).webm",
+        ]
+        urls.append("\(MediaURL.host)/\(folder)/picture-\(number).\(MediaURL.fileExtension(image.type))")
         return urls.compactMap(URL.init(string:))
+    }
+
+    var webmURL: URL? {
+        URL(string: "\(MediaURL.host)/\(folder)/webm/picture-\(number).webm")
     }
 
     /// External link for embedded players.

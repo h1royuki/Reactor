@@ -223,19 +223,20 @@ struct PostActionsBar: View {
         }
     }
 
-    /// Pictures go straight to Photos; a WebM video (Photos can't take it) opens the share sheet,
-    /// where "Save to Files" is available.
+    /// Everything goes straight to Photos; only a video without an mp4 copy (Photos can't take
+    /// WebM) opens the share sheet, where "Save to Files" is available.
     private func download() {
         downloading = true
         Task {
             defer { downloading = false }
             do {
-                if !MediaSaver.photos(in: post).isEmpty {
-                    let count = try await MediaSaver.savePhotos(of: post)
+                let result = try await MediaSaver.save(post)
+                if let summary = result.summary {
                     Haptics.tap()
-                    ToastCenter.shared.show(count == 1 ? "Сохранено в «Фото»" : "Сохранено в «Фото»: \(count)")
-                } else {
-                    shareItem = ShareItem(url: try await MediaSaver.videoFile(of: post))
+                    ToastCenter.shared.show(summary)
+                }
+                if let file = result.unsavedVideo {
+                    shareItem = ShareItem(url: file)
                 }
             } catch {
                 ToastCenter.shared.show(error)
